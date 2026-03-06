@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Tetris</title>
+  <style>
+    body{margin:0;background:#111;color:#eee;font-family:system-ui;display:grid;place-items:center;height:100vh}
+    .wrap{display:flex;gap:16px;align-items:flex-start}
+    canvas{background:#000;border:2px solid #444}
+    .panel{min-width:160px}
+    h1{font-size:18px;margin:0 0 8px}
+    .k{opacity:.8;font-size:13px;line-height:1.5}
+    button{margin-top:10px;padding:8px 10px;background:#2a2a2a;color:#fff;border:1px solid #555;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <canvas id="game" width="300" height="600"></canvas>
+    <div class="panel">
+      <h1>테트리스</h1>
+      <div>점수: <b id="score">0</b></div>
+      <div class="k">← → 이동<br>↑ 회전<br>↓ 소프트드롭<br>Space 하드드롭</div>
+      <button id="restart">다시 시작</button>
+    </div>
+  </div>
+<script>
+const COLS=10, ROWS=20, SIZE=30;
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const scoreEl=document.getElementById('score');
+const colors=[null,'#00f0f0','#0000f0','#f0a000','#f0f000','#00f000','#a000f0','#f00000'];
+const shapes={
+  I:[[1,1,1,1]], J:[[2,0,0],[2,2,2]], L:[[0,0,3],[3,3,3]],
+  O:[[4,4],[4,4]], S:[[0,5,5],[5,5,0]], T:[[0,6,0],[6,6,6]], Z:[[7,7,0],[0,7,7]]
+};
+let board, piece, score, dropCounter=0, dropInterval=700, lastTime=0, gameOver=false;
+function reset(){
+  board=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  score=0; gameOver=false; scoreEl.textContent=score;
+  spawn();
+}
+function spawn(){
+  const keys=Object.keys(shapes); const k=keys[(Math.random()*keys.length)|0];
+  piece={matrix:shapes[k].map(r=>r.slice()),x:((COLS/2)|0)-2,y:0};
+  if(collide()) gameOver=true;
+}
+function collide(offX=0,offY=0,m=piece.matrix){
+  for(let y=0;y<m.length;y++) for(let x=0;x<m[y].length;x++){
+    if(!m[y][x]) continue;
+    const nx=piece.x+x+offX, ny=piece.y+y+offY;
+    if(nx<0||nx>=COLS||ny>=ROWS) return true;
+    if(ny>=0&&board[ny][nx]) return true;
+  } return false;
+}
+function merge(){
+  piece.matrix.forEach((r,y)=>r.forEach((v,x)=>{if(v&&piece.y+y>=0)board[piece.y+y][piece.x+x]=v;}));
+}
+function clearLines(){
+  let lines=0;
+  outer: for(let y=ROWS-1;y>=0;y--){
+    for(let x=0;x<COLS;x++) if(!board[y][x]) continue outer;
+    board.splice(y,1); board.unshift(Array(COLS).fill(0)); lines++; y++;
+  }
+  if(lines){ score += [0,100,300,500,800][lines]||1000; scoreEl.textContent=score; }
+}
+function rotate(){
+  const m=piece.matrix; const r=m[0].map((_,i)=>m.map(row=>row[i]).reverse());
+  if(!collide(0,0,r)) piece.matrix=r;
+}
+function drop(){
+  if(!collide(0,1)) piece.y++;
+  else{ merge(); clearLines(); spawn(); }
+}
+function hardDrop(){ while(!collide(0,1)) piece.y++; drop(); }
+function drawCell(x,y,v){ ctx.fillStyle=colors[v]; ctx.fillRect(x*SIZE,y*SIZE,SIZE-1,SIZE-1); }
+function draw(){
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) if(board[y][x]) drawCell(x,y,board[y][x]);
+  if(!gameOver) piece.matrix.forEach((r,y)=>r.forEach((v,x)=>v&&drawCell(piece.x+x,piece.y+y,v)));
+  else{ ctx.fillStyle='rgba(0,0,0,.65)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle='#fff'; ctx.font='bold 36px sans-serif'; ctx.fillText('GAME OVER',40,310); }
+}
+function update(t=0){
+  const dt=t-lastTime; lastTime=t;
+  if(!gameOver){ dropCounter+=dt; if(dropCounter>dropInterval){ drop(); dropCounter=0; } }
+  draw(); requestAnimationFrame(update);
+}
+document.addEventListener('keydown',e=>{
+  if(gameOver) return;
+  if(e.key==='ArrowLeft'&&!collide(-1,0)) piece.x--;
+  if(e.key==='ArrowRight'&&!collide(1,0)) piece.x++;
+  if(e.key==='ArrowDown') drop();
+  if(e.key==='ArrowUp') rotate();
+  if(e.code==='Space'){ e.preventDefault(); hardDrop(); }
+});
+document.getElementById('restart').onclick=reset;
+reset(); update();
+</script>
+</body>
+</html>
